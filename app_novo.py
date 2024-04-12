@@ -19,6 +19,7 @@ def puxa_dados():
     operation = operation.rename(columns = {'Production Order Number':'PRODUCTION ORDER NO'})
     
     df = orders.merge(operation, on = 'PRODUCTION ORDER NO')
+    df['CUSTOMER NAME'] = ""
     qtd_process = df.groupby('PRODUCTION ORDER NO', as_index = False).agg({'Operation Number' : pd.Series.nunique})
     qtd_process.columns = ['PRODUCTION ORDER NO', 'PROCESS QT']
     df = df.merge(qtd_process, on = 'PRODUCTION ORDER NO')
@@ -39,7 +40,9 @@ df, df_group = puxa_dados()
 st.header("Searcher")
 selected_po = st.selectbox("Select the PO:", df_group['PRODUCTION ORDER NO'])
 st.write(df_group.loc[df_group['PRODUCTION ORDER NO'] == selected_po])
+
 #Fazendo o tracking da peça
+st.write("Process Tracker")
 df_selected_po = df.loc[df['PRODUCTION ORDER NO'] == selected_po].reset_index(drop = True)
 df_selected_po['status'] = (df_selected_po['Work Center'] == df_selected_po['ACTUAL_WORK'])*1
 qtd_colunas_po = math.ceil(df_selected_po.shape[0]/5)
