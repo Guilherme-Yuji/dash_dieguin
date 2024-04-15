@@ -5,11 +5,11 @@ import plotly.graph_objects as go
 import datetime
 import math
 
-st.set_page_config(page_title='Dash Dieguin',
+st.set_page_config(page_title='Dashboard',
     layout='wide')
 
 st.title("""
-	Dash Dieguin
+	Dashboard
 	""")
 
 @st.cache_resource
@@ -20,6 +20,8 @@ def puxa_dados():
     
     df = orders.merge(operation, on = 'PRODUCTION ORDER NO')
     df['CUSTOMER NAME'] = ""
+    df['PRODUCTION ORDER NO'] = df['PRODUCTION ORDER NO'].astype(str)
+    df['SALES ORDER NO'] = df['SALES ORDER NO'].astype(str)
     qtd_process = df.groupby('PRODUCTION ORDER NO', as_index = False).agg({'Operation Number' : pd.Series.nunique})
     qtd_process.columns = ['PRODUCTION ORDER NO', 'PROCESS QT']
     df = df.merge(qtd_process, on = 'PRODUCTION ORDER NO')
@@ -31,15 +33,24 @@ def puxa_dados():
     df_work['ACTUAL_WORK'] = df_work['Work Center'].apply(lambda x: seed.choice(x))
 
     df = df.merge(df_work[['PRODUCTION ORDER NO','ACTUAL_WORK']], on = 'PRODUCTION ORDER NO')
-    df_group = df.groupby(['PRODUCTION ORDER NO','CUSTOMER NAME', 'SALES ORDER NO',"PW POST DATE",'PW DUE DATE','ACTUAL_WORK'], as_index= False)[['PROCESS QT','DELAY']].mean()
+    
+    df_actual = df.loc[df['Work Center'] == df['ACTUAL_WORK']]
+    df_actual['PROCESS_STATUS'] = (df_actual['Operation Number']/10).astype(int).astype(str) + "/" + df_actual['PROCESS QT'].astype(str)
+    df = df.merge(df_actual[['PRODUCTION ORDER NO','PROCESS_STATUS']], on = 'PRODUCTION ORDER NO')
+    
+    df_group = df.groupby(['PRODUCTION ORDER NO','CUSTOMER NAME', 'SALES ORDER NO',"PW POST DATE",'PW DUE DATE','ACTUAL_WORK','PROCESS_STATUS'], as_index= False)[['PROCESS QT','DELAY']].mean()
     
     return df, df_group
 
 df, df_group = puxa_dados()
 
-st.header("Searcher")
-selected_po = st.selectbox("Select the PO:", df_group['PRODUCTION ORDER NO'])
-st.write(df_group.loc[df_group['PRODUCTION ORDER NO'] == selected_po])
+st.header("Production Order locator")
+selected_po = st.selectbox("Select the Production Order:", df_group['PRODUCTION ORDER NO'])
+st.dataframe(df_group.loc[df_group['PRODUCTION ORDER NO'] == selected_po],
+             column_config={
+                 'PW POST DATE': st.column_config.DatetimeColumn(format = "YYYY-MM-DD"),
+                 'PW DUE DATE': st.column_config.DatetimeColumn(format = "YYYY-MM-DD")
+             }, use_container_width= True)
 
 #Fazendo o tracking da peça
 st.write("Process Tracker")
@@ -62,7 +73,11 @@ for i in range(len(colunas_po)):
 
 st.write('')
 st.header("Product Priorizer")
-st.write(df_group.sort_values(['PW DUE DATE', 'PROCESS QT'], ascending=[True, True]))
+st.dataframe(df_group.sort_values(['PW DUE DATE', 'PROCESS QT'], ascending=[True, True]),
+             column_config={
+                 'PW POST DATE': st.column_config.DatetimeColumn(format = "YYYY-MM-DD"),
+                 'PW DUE DATE': st.column_config.DatetimeColumn(format = "YYYY-MM-DD")
+             }, use_container_width= True)
 
 
 st.header("SECTOR STATUS")
@@ -107,8 +122,8 @@ st.plotly_chart(fig, use_container_width= True)
 st.header("Days of Delay")
 delays = df_group.groupby('DELAY', as_index= False).size()
 col1, col2, col3 = st.columns(3)
-col1.metric('IN PRAZO', delays.query('DELAY == 0')['size'].sum())
-col2.metric('OUT PRAZO', delays.query('DELAY != 0')['size'].sum())
+col1.metric('On time', delays.query('DELAY == 0')['size'].sum())
+col2.metric('Delayed', delays.query('DELAY != 0')['size'].sum())
 
 fig = go.Figure()
 fig.add_trace(go.Bar(x = delays.query('DELAY > 0')['DELAY'], y = delays.query('DELAY > 0')['size']))
